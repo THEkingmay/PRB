@@ -84,17 +84,28 @@
         loadModel("https://raw.githubusercontent.com/THEkingmay/comgraphic_objLoader/main/oiiaioooooiai_cat.glb", new THREE.Vector3(-2, 0, 2));
         loadModel("https://raw.githubusercontent.com/THEkingmay/comgraphic_objLoader/main/robot_from_the_series_love_death_and_robots.glb", new THREE.Vector3(2, 0, 2));
 
-        // ควบคุมแสงด้วยปุ่ม
         window.addEventListener('keydown', e => {
+            const step = 0.3;   // ระยะการเคลื่อนที่
+            const angle = 0.1;  // องศาการหมุน
+            const lightStep = 0.2; // การปรับความสว่าง
             switch (e.key) {
-                case 'w': directionalLight.position.z -= 0.3; break;
-                case 's': directionalLight.position.z += 0.3; break;
-                case 'a': directionalLight.position.x -= 0.3; break;
-                case 'd': directionalLight.position.x += 0.3; break;
-                case 'ArrowUp': directionalLight.position.y += 0.3; break;
-                case 'ArrowDown': directionalLight.position.y -= 0.3; break;
-            }
-        });
+                // === ควบคุมตำแหน่งแสง ===
+                case "w": directionalLight.position.z -= step; break;
+                case "s": directionalLight.position.z += step; break;
+                case "a": directionalLight.position.x -= step; break;
+                case "d": directionalLight.position.x += step; break;
+                case "ArrowUp": directionalLight.position.y += step; break;
+                case "ArrowDown": directionalLight.position.y -= step; break;
+
+                // === หมุนไฟรอบฉาก ===
+                case "q": directionalLight.rotation.y -= angle; break;
+                case "e": directionalLight.rotation.y += angle; break;
+
+                // === ปรับความสว่าง ===
+                case "+": directionalLight.intensity += lightStep; break;
+                case "-": directionalLight.intensity = Math.max(0, directionalLight.intensity - lightStep); break;
+
+        }});
 
         // Render
         function animate() {
