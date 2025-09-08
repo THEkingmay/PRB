@@ -1,20 +1,85 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>PBR Shader</title>
+    <title>PBR Shader with UI</title>
     <style>
         body {
             margin: 0;
             overflow: hidden;
+            font-family: Arial, sans-serif;
+            color: #fff;
+        }
+
+        #ui-container {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 10px;
+            background-color: rgba(0, 0, 0, 0.5);
+            border-radius: 5px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .ui-section {
+            border: 1px solid #444;
+            padding: 10px;
+            border-radius: 5px;
+        }
+
+        .ui-section h3 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        .ui-button {
+            background-color: #555;
+            border: none;
+            color: white;
+            padding: 5px 10px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 14px;
+            margin: 2px;
+            cursor: pointer;
+            border-radius: 3px;
+        }
+
+        .ui-button:hover {
+            background-color: #777;
+        }
+
+        input[type="range"] {
+            width: 150px;
         }
     </style>
 </head>
 <body>
-    <!-- Three.js -->
+    <div id="ui-container">
+        <div class="ui-section">
+            <h3>ควบคุมแสง</h3>
+            <label>ความสว่าง:</label>
+            <input type="range" id="light-intensity" min="0" max="5" step="0.1" value="2">
+            <br>
+            <label>สีแสง:</label>
+            <input type="color" id="light-color" value="#ffffff">
+        </div>
+        <div class="ui-section">
+            <h3>เงา</h3>
+            <button id="toggle-shadows" class="ui-button">เปิด/ปิดเงา</button>
+        </div>
+        <div class="ui-section">
+            <h3>ควบคุมหุ่นยนต์</h3>
+            <p>ใช้ปุ่ม WASD</p>
+        </div>
+    </div>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/EXRLoader.js"></script>
     <script>
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -24,9 +89,26 @@
 
         const scene = new THREE.Scene();
 
+ const exrLoader = new THREE.EXRLoader();
+exrLoader.load(
+    "https://raw.githubusercontent.com/THEkingmay/comgraphic_objLoader/main/citrus_orchard_road_puresky_1k.exr",
+    function(texture){
+        texture.mapping = THREE.EquirectangularReflectionMapping;
+        scene.background = texture;
+        scene.environment = texture;
+        console.log("✅ EXR HDR โหลดเสร็จ");
+    },
+    undefined,
+    function(err){
+        console.error("❌ โหลด EXR ไม่ได้", err);
+    }
+);
+
+    
+
         // กล้อง
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 2, 5);
+        camera.position.set(0, 15, 25);
         const controls = new THREE.OrbitControls(camera, renderer.domElement);
 
         // แสง
@@ -34,8 +116,24 @@
         scene.add(ambientLight);
 
         const directionalLight = new THREE.DirectionalLight(0xffffff, 2);
-        directionalLight.position.set(10, 5, 10);
+        directionalLight.position.set(10, 20, 10); // ยกไฟให้สูงขึ้นเพื่อเงาจะตกลงพื้นกว้างขึ้น
         directionalLight.castShadow = true;
+
+        // ปรับคุณภาพเงาให้คมขึ้น
+        directionalLight.shadow.mapSize.width = 2048;
+        directionalLight.shadow.mapSize.height = 2048;
+
+        // ขยายขอบเขตการฉายเงา (สำคัญมาก)
+        directionalLight.shadow.camera.near = 0.5;
+        directionalLight.shadow.camera.far = 200; // ให้ไกลพอ
+        directionalLight.shadow.camera.left = -100;
+        directionalLight.shadow.camera.right = 100;
+        directionalLight.shadow.camera.top = 100;
+        directionalLight.shadow.camera.bottom = -100;
+
+        // เปิด bias ปรับให้เงาไม่ซ้อน
+        directionalLight.shadow.bias = -0.0005;
+
         scene.add(directionalLight);
 
         // พื้น
@@ -45,13 +143,12 @@
             undefined,
             err => console.error("❌ โหลด texture ไม่ได้", err)
         );
-
         texture.wrapS = THREE.RepeatWrapping;
         texture.wrapT = THREE.RepeatWrapping;
-        texture.repeat.set(2, 2);
+        texture.repeat.set(5, 5);
 
         const floorMaterial = new THREE.MeshStandardMaterial({ map: texture });
-        const floorGeom = new THREE.PlaneGeometry(10, 10);
+        const floorGeom = new THREE.PlaneGeometry(100, 100);
         const floorMesh = new THREE.Mesh(floorGeom, floorMaterial);
         floorMesh.rotation.x = -Math.PI / 2;
         floorMesh.receiveShadow = true;
@@ -59,8 +156,9 @@
 
         // โหลดโมเดล
         const loader = new THREE.GLTFLoader();
+        let robotModel;
 
-        function loadModel(url, position) {
+        function loadModel(url, position, isRobot = false, scale) {
             loader.load(
                 url,
                 gltf => {
@@ -72,7 +170,14 @@
                         }
                     });
                     obj.position.copy(position);
+                    // Apply the scale here
+                    obj.scale.set(scale, scale, scale);
                     scene.add(obj);
+
+                    if (isRobot) {
+                        robotModel = obj;
+                        console.log("✅ โหลดโมเดลหุ่นยนต์สำเร็จ");
+                    }
                     console.log(`✅ โหลดโมเดล: ${url}`);
                 },
                 undefined,
@@ -80,32 +185,46 @@
             );
         }
 
-        loadModel("https://raw.githubusercontent.com/THEkingmay/comgraphic_objLoader/main/car-house.glb", new THREE.Vector3(0, 0, 2));
-        loadModel("https://raw.githubusercontent.com/THEkingmay/comgraphic_objLoader/main/oiiaioooooiai_cat.glb", new THREE.Vector3(-2, 0, 2));
-        loadModel("https://raw.githubusercontent.com/THEkingmay/comgraphic_objLoader/main/robot_from_the_series_love_death_and_robots.glb", new THREE.Vector3(2, 0, 2));
+        // Call the loadModel function with the new scale parameter
+        loadModel("https://raw.githubusercontent.com/THEkingmay/comgraphic_objLoader/main/car-house.glb", new THREE.Vector3(-12, 0, 2), false, 10);
+        loadModel("https://raw.githubusercontent.com/THEkingmay/comgraphic_objLoader/main/oiiaioooooiai_cat.glb", new THREE.Vector3(0, 0, 17), false, 10);
+        loadModel("https://raw.githubusercontent.com/THEkingmay/comgraphic_objLoader/main/robot_from_the_series_love_death_and_robots.glb", new THREE.Vector3(2, 0, 2), true, 1);
 
+        // UI Controls
+        const intensityInput = document.getElementById('light-intensity');
+        intensityInput.addEventListener('input', e => {
+            directionalLight.intensity = parseFloat(e.target.value);
+        });
+
+        const colorInput = document.getElementById('light-color');
+        colorInput.addEventListener('input', e => {
+            directionalLight.color.set(e.target.value);
+        });
+
+        const toggleShadowsButton = document.getElementById('toggle-shadows');
+        toggleShadowsButton.addEventListener('click', () => {
+            renderer.shadowMap.enabled = !renderer.shadowMap.enabled;
+            scene.traverse(child => {
+                if (child.isMesh) {
+                    child.castShadow = renderer.shadowMap.enabled;
+                    child.receiveShadow = renderer.shadowMap.enabled;
+                }
+            });
+            console.log(`💡 เงา: ${renderer.shadowMap.enabled ? 'เปิด' : 'ปิด'}`);
+        });
+
+        // Event listener for keyboard controls
         window.addEventListener('keydown', e => {
-            const step = 0.3;   // ระยะการเคลื่อนที่
-            const angle = 0.1;  // องศาการหมุน
-            const lightStep = 0.2; // การปรับความสว่าง
-            switch (e.key) {
-                // === ควบคุมตำแหน่งแสง ===
-                case "w": directionalLight.position.z -= step; break;
-                case "s": directionalLight.position.z += step; break;
-                case "a": directionalLight.position.x -= step; break;
-                case "d": directionalLight.position.x += step; break;
-                case "ArrowUp": directionalLight.position.y += step; break;
-                case "ArrowDown": directionalLight.position.y -= step; break;
-
-                // === หมุนไฟรอบฉาก ===
-                case "q": directionalLight.rotation.y -= angle; break;
-                case "e": directionalLight.rotation.y += angle; break;
-
-                // === ปรับความสว่าง ===
-                case "+": directionalLight.intensity += lightStep; break;
-                case "-": directionalLight.intensity = Math.max(0, directionalLight.intensity - lightStep); break;
-
-        }});
+            const step = 1;
+            if (robotModel) {
+                switch (e.key) {
+                    case "w": robotModel.position.z -= step; break;
+                    case "s": robotModel.position.z += step; break;
+                    case "a": robotModel.position.x -= step; break;
+                    case "d": robotModel.position.x += step; break;
+                }
+            }
+        });
 
         // Render
         function animate() {
